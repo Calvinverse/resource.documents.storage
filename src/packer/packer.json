@@ -29,11 +29,13 @@
             "enable_virtualization_extensions": false,
             "generation": 2,
             "guest_additions_mode": "disable",
+            "headless": true,
             "http_directory": "{{ user `dir_http_user` }}",
             "http_port_min": 8150,
             "http_port_max": 8160,
             "output_directory": "{{ user `dir_temp` }}/{{ user `vm_name` }}",
             "ram_size": "{{ user `vm_ram_size_in_mb` }}",
+            "secure_boot_template": "MicrosoftUEFICertificateAuthority",
             "shutdown_command": "echo '{{user `admin_password`}}' | sudo -S -E shutdown -P now",
             "shutdown_timeout": "5m",
             "skip_compaction": false,
@@ -88,13 +90,13 @@
             "type": "shell"
         },
         {
-            "command": "New-VHD -Path '{{ user `dir_temp` }}/{{ build_name }}/Virtual Hard Disks/data.vhdx' -SizeBytes 50GB -BlockSizeBytes 1MB",
-            "execute_command": ["Powershell.exe", "-NonInteractive", "-NoLogo", "-NoProfile", "-Command", "{{.Command}}"],
-            "type": "shell-local"
-        },
-        {
-            "command": "Add-VmHardDiskDrive -VMName {{ user `vm_name` }} -Path '{{ user `dir_temp` }}/{{build_name}}/Virtual Hard Disks/data.vhdx'",
-            "execute_command": ["Powershell.exe", "-NonInteractive", "-NoLogo", "-NoProfile", "-Command", "{{.Command}}"],
+            "env_var_format": "$env:%s=\"%s\"; ",
+            "execute_command": ["powershell.exe", "{{.Vars}} {{.Script}}"],
+            "inline": [
+                "New-VHD -Path '{{ user `dir_temp` }}/{{ build_name }}/Virtual Hard Disks/data.vhdx' -SizeBytes 50GB -BlockSizeBytes 1MB",
+                "Add-VmHardDiskDrive -VMName {{ user `vm_name` }} -Path '{{ user `dir_temp` }}/{{build_name}}/Virtual Hard Disks/data.vhdx'"
+            ],
+            "tempfile_extension": ".ps1",
             "type": "shell-local"
         },
         {
