@@ -5,7 +5,7 @@ Describe 'The firewall' {
         It 'should return a status' {
             $ufwOutput | Should Not Be $null
             $ufwOutput.GetType().FullName | Should Be 'System.Object[]'
-            $ufwOutput.Length | Should Be 39
+            $ufwOutput.Length | Should Be 31
         }
 
         It 'should be enabled' {
@@ -52,6 +52,10 @@ Describe 'The firewall' {
     Context 'should allow elasticsearch' {
         It 'on port 9200'{
             ($ufwOutput | Where-Object {$_ -match '(9200/tcp)\s*(ALLOW)\s*(Anywhere)'} ) | Should Not Be $null
+        }
+
+        It 'on port 9300'{
+            ($ufwOutput | Where-Object {$_ -match '(9300/tcp)\s*(ALLOW)\s*(Anywhere)'} ) | Should Not Be $null
         }
     }
 
