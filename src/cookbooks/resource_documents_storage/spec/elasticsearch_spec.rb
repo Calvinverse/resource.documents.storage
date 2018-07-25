@@ -18,26 +18,20 @@ describe 'resource_documents_storage::elasticsearch' do
       )
     end
 
+    it 'creates the elasticsearch user' do
+      expect(chef_run).to create_elasticsearch_user('elasticsearch')
+    end
+
+    it 'installs elasticsearch' do
+      expect(chef_run).to install_elasticsearch('elasticsearch')
+    end
+
+    it 'configures elasticsearch' do
+      expect(chef_run).to manage_elasticsearch_configure('elasticsearch')
+    end
+
     it 'installs the elasticsearch service' do
-      expect(chef_run).to create_systemd_service('elasticsearch').with(
-        action: [:create],
-        unit_after: %w[network-online.target],
-        unit_description: 'Elasticsearch',
-        service_exec_start: '/usr/share/elasticsearch/bin/elasticsearch -p /var/run/elasticsearch/elasticsearch.pid',
-        service_group: 'elasticsearch',
-        service_kill_mode: 'process',
-        service_kill_signal: 'SIGTERM',
-        service_limit_as: 'infinity',
-        service_limit_nofile: 65_536,
-        service_limit_nproc: 4096,
-        service_restart: 'on-failure',
-        service_runtime_directory: 'elasticsearch',
-        service_send_sigkill: false,
-        service_success_exit_status: 143,
-        service_timeout_stop_sec: 0,
-        service_user: 'elasticsearch',
-        install_wanted_by: %w[network-online.target]
-      )
+      expect(chef_run).to configure_elasticsearch_service('elasticsearch')
     end
   end
 
@@ -70,7 +64,7 @@ describe 'resource_documents_storage::elasticsearch' do
                 "timeout": "5s"
               }
             ],
-            "enableTagOverride": false,
+            "enable_tag_override": false,
             "id": "elasticsearch_http",
             "name": "documents",
             "port": 9200,
@@ -84,6 +78,100 @@ describe 'resource_documents_storage::elasticsearch' do
     it 'creates the /etc/consul/conf.d/elasticsearch-http.json' do
       expect(chef_run).to create_file('/etc/consul/conf.d/elasticsearch-http.json')
         .with_content(consul_elasticsearch_http_config_content)
+    end
+  end
+
+  context 'adds the consul-template files for the elasticsearch configuration' do
+    let(:chef_run) { ChefSpec::SoloRunner.converge(described_recipe) }
+
+    elasticsearch_config_template_content = <<~CONF
+      cluster.name: "{{ keyOrDefault "config/services/consul/datacenter" "unknown" }}"
+      node.name: ${HOSTNAME}
+      path.data: "/srv/elasticsearch/data"
+      path.logs: "/var/log/elasticsearch"
+
+      network.host: [ _eth0:ipv4_ ]
+
+      http.port: 9200
+      transport.tcp.port: 9300
+
+      discovery.zen.ping.unicast.hosts:
+        - http.documents.service.{{ keyOrDefault "config/services/consul/domain" "unknown" }}:9300
+      discovery.zen.minimum_master_nodes: 2
+    CONF
+    it 'creates ElasticSearch configuration template file in the consul-template template directory' do
+      expect(chef_run).to create_file('/etc/consul-template.d/templates/elasticsearch_config.ctmpl')
+        .with_content(elasticsearch_config_template_content)
+    end
+
+    consul_template_telegraf_elasticsearch_inputs_content = <<~CONF
+      # This block defines the configuration for a template. Unlike other blocks,
+      # this block may be specified multiple times to configure multiple templates.
+      # It is also possible to configure templates via the CLI directly.
+      template {
+        # This is the source file on disk to use as the input template. This is often
+        # called the "Consul Template template". This option is required if not using
+        # the `contents` option.
+        source = "/etc/consul-template.d/templates/elasticsearch_config.ctmpl"
+
+        # This is the destination path on disk where the source template will render.
+        # If the parent directories do not exist, Consul Template will attempt to
+        # create them, unless create_dest_dirs is false.
+        destination = "/etc/elasticsearch/elasticsearch.yml"
+
+        # This options tells Consul Template to create the parent directories of the
+        # destination path if they do not exist. The default value is true.
+        create_dest_dirs = false
+
+        # This is the optional command to run when the template is rendered. The
+        # command will only run if the resulting template changes. The command must
+        # return within 30s (configurable), and it must have a successful exit code.
+        # Consul Template is not a replacement for a process monitor or init system.
+        command = "systemctl reload elasticsearch"
+
+        # This is the maximum amount of time to wait for the optional command to
+        # return. Default is 30s.
+        command_timeout = "45s"
+
+        # Exit with an error when accessing a struct or map field/key that does not
+        # exist. The default behavior will print "<no value>" when accessing a field
+        # that does not exist. It is highly recommended you set this to "true" when
+        # retrieving secrets from Vault.
+        error_on_missing_key = false
+
+        # This is the permission to render the file. If this option is left
+        # unspecified, Consul Template will attempt to match the permissions of the
+        # file that already exists at the destination path. If no file exists at that
+        # path, the permissions are 0644.
+        perms = 0755
+
+        # This option backs up the previously rendered template at the destination
+        # path before writing a new one. It keeps exactly one backup. This option is
+        # useful for preventing accidental changes to the data without having a
+        # rollback strategy.
+        backup = true
+
+        # These are the delimiters to use in the template. The default is "{{" and
+        # "}}", but for some templates, it may be easier to use a different delimiter
+        # that does not conflict with the output file itself.
+        left_delimiter  = "{{"
+        right_delimiter = "}}"
+
+        # This is the `minimum(:maximum)` to wait before rendering a new template to
+        # disk and triggering a command, separated by a colon (`:`). If the optional
+        # maximum value is omitted, it is assumed to be 4x the required minimum value.
+        # This is a numeric time with a unit suffix ("5s"). There is no default value.
+        # The wait value for a template takes precedence over any globally-configured
+        # wait.
+        wait {
+          min = "2s"
+          max = "10s"
+        }
+      }
+    CONF
+    it 'creates telegraf_elasticsearch_inputs.hcl in the consul-template template directory' do
+      expect(chef_run).to create_file('/etc/consul-template.d/conf/telegraf_elasticsearch_inputs.hcl')
+        .with_content(consul_template_telegraf_elasticsearch_inputs_content)
     end
   end
 

@@ -11,6 +11,7 @@ default['consul_template']['template_path'] = '/etc/consul-template.d/templates'
 # ELASTICSEARCH
 #
 
+default['elasticsearch']['version'] = '6.3.1'
 default['elasticsearch']['service_user'] = 'elasticsearch'
 default['elasticsearch']['service_group'] = 'elasticsearch'
 
@@ -24,6 +25,7 @@ default['elasticsearch']['path']['pid'] = '/var/run/elasticsearch'
 default['elasticsearch']['path']['plugins'] = '/usr/share/elasticsearch/plugins'
 default['elasticsearch']['path']['bin'] = '/usr/share/elasticsearch/bin'
 
+default['elasticsearch']['port']['discovery'] = 9300
 default['elasticsearch']['port']['http'] = 9200
 
 default['elasticsearch']['telegraf']['consul_template_inputs_file'] = 'telegraf_elasticsearch_inputs.ctmpl'
