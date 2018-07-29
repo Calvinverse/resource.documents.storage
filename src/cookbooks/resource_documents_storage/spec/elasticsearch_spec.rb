@@ -13,7 +13,7 @@ describe 'resource_documents_storage::elasticsearch' do
     it 'creates and mounts the meta file system at /srv/elasticsearch/data' do
       expect(chef_run).to create_directory('/srv/elasticsearch/data').with(
         group: 'elasticsearch',
-        mode: '775',
+        mode: '770',
         owner: 'elasticsearch'
       )
     end
@@ -227,6 +227,11 @@ describe 'resource_documents_storage::elasticsearch' do
     it 'creates telegraf ElasticSearch input template file in the consul-template template directory' do
       expect(chef_run).to create_file('/etc/consul-template.d/templates/telegraf_elasticsearch_inputs.ctmpl')
         .with_content(telegraf_elasticsearch_inputs_template_content)
+        .with(
+          group: 'root',
+          owner: 'root',
+          mode: '0550'
+        )
     end
 
     consul_template_telegraf_elasticsearch_inputs_content = <<~CONF
@@ -252,7 +257,7 @@ describe 'resource_documents_storage::elasticsearch' do
         # command will only run if the resulting template changes. The command must
         # return within 30s (configurable), and it must have a successful exit code.
         # Consul Template is not a replacement for a process monitor or init system.
-        command = "systemctl reload telegraf"
+        command = "chown telegraf:telegraf /etc/telegraf/telegraf.d/inputs_elasticsearch.conf && systemctl reload telegraf"
 
         # This is the maximum amount of time to wait for the optional command to
         # return. Default is 30s.
@@ -268,7 +273,7 @@ describe 'resource_documents_storage::elasticsearch' do
         # unspecified, Consul Template will attempt to match the permissions of the
         # file that already exists at the destination path. If no file exists at that
         # path, the permissions are 0644.
-        perms = 0755
+        perms = 0550
 
         # This option backs up the previously rendered template at the destination
         # path before writing a new one. It keeps exactly one backup. This option is
@@ -297,6 +302,11 @@ describe 'resource_documents_storage::elasticsearch' do
     it 'creates telegraf_elasticsearch_inputs.hcl in the consul-template template directory' do
       expect(chef_run).to create_file('/etc/consul-template.d/conf/telegraf_elasticsearch_inputs.hcl')
         .with_content(consul_template_telegraf_elasticsearch_inputs_content)
+        .with(
+          group: 'root',
+          owner: 'root',
+          mode: '0550'
+        )
     end
   end
 end

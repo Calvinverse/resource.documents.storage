@@ -61,4 +61,6 @@ default['firewall']['ipv6_enabled'] = false
 # TELEGRAF
 #
 
+default['telegraf']['service_user'] = 'telegraf'
+default['telegraf']['service_group'] = 'telegraf'
 default['telegraf']['config_directory'] = '/etc/telegraf/telegraf.d'

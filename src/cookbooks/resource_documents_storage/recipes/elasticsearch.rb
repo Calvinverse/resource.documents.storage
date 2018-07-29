@@ -29,7 +29,7 @@ elasticsearch_data_path = node['elasticsearch']['path']['data']
 directory elasticsearch_data_path do
   action :create
   group node['elasticsearch']['service_group']
-  mode '775'
+  mode '770'
   owner node['elasticsearch']['service_user']
   recursive true
 end
@@ -227,10 +227,15 @@ file "#{consul_template_config_path}/elasticsearch_config.hcl" do
       }
     }
   HCL
-  mode '755'
+  group 'root'
+  mode '0550'
+  owner 'root'
 end
 
-# telegraf
+#
+# TELEGRAF
+#
+
 telegraf_service = 'telegraf'
 telegraf_config_directory = node['telegraf']['config_directory']
 telegraf_elasticsearch_inputs_template_file = node['elasticsearch']['telegraf']['consul_template_inputs_file']
@@ -282,7 +287,9 @@ file "#{consul_template_template_path}/#{telegraf_elasticsearch_inputs_template_
     [inputs.elasticsearch.tags]
       influxdb_database = "{{ keyOrDefault "config/services/metrics/databases/services" "services" }}"
   CONF
-  mode '755'
+  group 'root'
+  mode '0550'
+  owner 'root'
 end
 
 file "#{consul_template_config_path}/telegraf_elasticsearch_inputs.hcl" do
@@ -310,7 +317,7 @@ file "#{consul_template_config_path}/telegraf_elasticsearch_inputs.hcl" do
       # command will only run if the resulting template changes. The command must
       # return within 30s (configurable), and it must have a successful exit code.
       # Consul Template is not a replacement for a process monitor or init system.
-      command = "systemctl reload #{telegraf_service}"
+      command = "chown #{node['telegraf']['service_user']}:#{node['telegraf']['service_group']} #{telegraf_config_directory}/inputs_elasticsearch.conf && systemctl reload #{telegraf_service}"
 
       # This is the maximum amount of time to wait for the optional command to
       # return. Default is 30s.
@@ -326,7 +333,7 @@ file "#{consul_template_config_path}/telegraf_elasticsearch_inputs.hcl" do
       # unspecified, Consul Template will attempt to match the permissions of the
       # file that already exists at the destination path. If no file exists at that
       # path, the permissions are 0644.
-      perms = 0755
+      perms = 0550
 
       # This option backs up the previously rendered template at the destination
       # path before writing a new one. It keeps exactly one backup. This option is
@@ -352,5 +359,7 @@ file "#{consul_template_config_path}/telegraf_elasticsearch_inputs.hcl" do
       }
     }
   HCL
-  mode '755'
+  group 'root'
+  mode '0550'
+  owner 'root'
 end
