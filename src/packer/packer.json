@@ -73,6 +73,7 @@
             ],
             "type": "shell"
         },
+
         {
             "expect_disconnect": false,
             "inline": [
@@ -134,6 +135,7 @@
             ],
             "type": "shell"
         },
+
         {
             "cookbook_paths": [
                 "{{ user `dir_cookbooks_vendors` }}"
