@@ -1,5 +1,0 @@
-config:
-  # Define the dashboard for influx
-  - key: config/services/dashboards/documents/provisioning/dashboards/services/service-elasticsearch
-    file: dashboards/services/service-elasticsearch.json
-
