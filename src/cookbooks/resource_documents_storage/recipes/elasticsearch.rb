@@ -7,6 +7,18 @@
 # Copyright 2017, P. van der Velde
 #
 
+#
+# INSTALL THE CALCULATOR
+#
+
+apt_package 'bc' do
+  action :install
+end
+
+#
+# ELASTICSEARCH USER
+#
+
 es_user = node['elasticsearch']['service_user']
 es_group = node['elasticsearch']['service_group']
 elasticsearch_user 'elasticsearch' do
@@ -64,6 +76,125 @@ elasticsearch_configure 'elasticsearch' do
   path_plugins node['elasticsearch']['path']['plugins']
 end
 
+# Disable DNS caching in the JVM. We have unbound for this. See:
+# - https://docs.oracle.com/javase/8/docs/technotes/guides/net/properties.html
+# - https://github.com/elastic/elasticsearch/issues/16412
+elasticsearch_jvm_security_override = "#{elasticsearch_config_path}/java.security"
+file elasticsearch_jvm_security_override do
+  action :create
+  content <<~PROPERTIES
+    networkaddress.cache.ttl=0
+    networkaddress.cache.negative.ttl=0
+  PROPERTIES
+  group node['elasticsearch']['service_group']
+  mode '0550'
+  owner node['elasticsearch']['service_user']
+end
+
+file "#{elasticsearch_config_path}/jvm.options" do
+  action :create
+  content <<~CONF
+    -XX:+UseConcMarkSweepGC
+    -XX:CMSInitiatingOccupancyFraction=75
+    -XX:+UseCMSInitiatingOccupancyOnly
+    -XX:+AlwaysPreTouch
+    -server
+    -Xss1m
+    -Djava.awt.headless=true
+    -Dfile.encoding=UTF-8
+    -Djna.nosys=true
+    -XX:-OmitStackTraceInFastThrow
+    -Dio.netty.noUnsafe=true
+    -Dio.netty.noKeySetOptimization=true
+    -Dio.netty.recycler.maxCapacityPerThread=0
+    -Dlog4j.shutdownHookEnabled=false
+    -Dlog4j2.disable.jmx=true
+    -XX:+HeapDumpOnOutOfMemoryError
+    -Djava.security.properties=#{elasticsearch_jvm_security_override}
+  CONF
+  group node['elasticsearch']['service_group']
+  mode '0550'
+  owner node['elasticsearch']['service_user']
+end
+
+# Update the elasticsearch start script to enable it to calculate its required
+# memory
+file '/usr/share/elasticsearch/bin/elasticsearch' do
+  action :create
+  content <<~TXT
+    #!/bin/bash
+
+    # CONTROLLING STARTUP:
+    #
+    # This script relies on a few environment variables to determine startup
+    # behavior, those variables are:
+    #
+    #   ES_PATH_CONF -- Path to config directory
+    #   ES_JAVA_OPTS -- External Java Opts on top of the defaults set
+    #
+    # Optionally, exact memory values can be set using the `ES_JAVA_OPTS`. Note that
+    # the Xms and Xmx lines in the JVM options file must be commented out. Example
+    # values are "512m", and "10g".
+    #
+    #   ES_JAVA_OPTS="-Xms8g -Xmx8g" ./bin/elasticsearch
+
+    max_memory() {
+      max_mem=$(free -m | grep -oP '\\d+' | head -n 1)
+      echo "${max_mem}"
+    }
+
+    # Check for the 'real memory size' and calculate mx from a ratio
+    # given (default is 70%)
+    max_mem="$(max_memory)"
+    java_max_memory=""
+    if [ "x${max_mem}" != "x0" ]; then
+      ratio=70
+
+      mx=$(echo "(${max_mem} * ${ratio} / 100 + 0.5)" | bc | awk '{printf("%d\\n",$1 + 0.5)}')
+      java_max_memory="-Xmx${mx}m -Xms${mx}m"
+
+      echo "Maximum memory for VM set to ${max_mem}. Setting max memory for java to ${mx} Mb"
+    fi
+
+    source "`dirname "$0"`"/elasticsearch-env
+
+    ES_JVM_OPTIONS="$ES_PATH_CONF"/jvm.options
+    JVM_OPTIONS=`"$JAVA" -cp "$ES_CLASSPATH" org.elasticsearch.tools.launchers.JvmOptionsParser "$ES_JVM_OPTIONS"`
+    ES_JAVA_OPTS="${JVM_OPTIONS//\\$\\{ES_TMPDIR\\}/$ES_TMPDIR} $ES_JAVA_OPTS"
+
+    cd "$ES_HOME"
+    nohup \\
+      "$JAVA" \\
+      $ES_JAVA_OPTS \\
+      $java_max_memory \\
+      -Des.path.home="$ES_HOME" \\
+      -Des.path.conf="$ES_PATH_CONF" \\
+      -Des.distribution.flavor="$ES_DISTRIBUTION_FLAVOR" \\
+      -Des.distribution.type="$ES_DISTRIBUTION_TYPE" \\
+      -cp "$ES_CLASSPATH" \\
+      org.elasticsearch.bootstrap.Elasticsearch \\
+      "$@" \\
+      <&- &
+
+    retval=$?
+    pid=$!
+
+    [ $retval -eq 0 ] || exit $retval
+    if [ ! -z "$ES_STARTUP_SLEEP_TIME" ]; then
+      sleep $ES_STARTUP_SLEEP_TIME
+    fi
+    if ! ps -p $pid > /dev/null ; then
+      exit 1
+    fi
+    exit 0
+
+    exit $?
+  TXT
+  group node['elasticsearch']['service_group']
+  mode '0550'
+  owner node['elasticsearch']['service_user']
+end
+
 #
 # SERVICE
 #
@@ -110,7 +241,7 @@ file '/etc/consul/conf.d/elasticsearch-http.json' do
         {
           "checks": [
             {
-              "http": "http://localhost:#{http_port}/ping",
+              "http": "http://localhost:#{http_port}/_cluster/health",
               "id": "elasticsearch_http_health_check",
               "interval": "30s",
               "method": "GET",
@@ -132,34 +263,113 @@ file '/etc/consul/conf.d/elasticsearch-http.json' do
 end
 
 #
+# FLAG FILES
+#
+
+flag_config = '/var/log/elasticsearch_config.log'
+file flag_config do
+  action :create
+  content <<~TXT
+    NotInitialized
+  TXT
+end
+
+flag_jvm_options = '/var/log/jvm_options.log'
+file flag_jvm_options do
+  action :create
+  content <<~TXT
+    NotInitialized
+  TXT
+end
+
+#
 # CONSUL-TEMPLATE FILES
 #
 
 consul_template_config_path = node['consul_template']['config_path']
 consul_template_template_path = node['consul_template']['template_path']
 
-# config
-elasticsearch_config_template_file = 'elasticsearch_config.ctmpl'
-file "#{consul_template_template_path}/#{elasticsearch_config_template_file}" do
+#
+# ELASTICSEARCH CONFIG
+#
+
+elasticsearch_config_script_template_file = 'elasticsearch_config.ctmpl'
+file "#{consul_template_template_path}/#{elasticsearch_config_script_template_file}" do
   action :create
   content <<~CONF
-    cluster.name: "{{ keyOrDefault "config/services/consul/datacenter" "unknown" }}"
+    #!/bin/sh
+
+    {{ if keyExists "config/services/consul/datacenter" }}
+    {{ if keyExists "config/services/documents/masters" }}
+    FLAG=$(cat #{flag_config})
+    if [ "$FLAG" = "NotInitialized" ]; then
+        echo "Write the elasticsearch configuration script ..."
+        cat <<'EOT' > #{elasticsearch_config_path}/elasticsearch.yml
+    cluster.name: "{{ key "config/services/consul/datacenter" }}"
     node.name: ${HOSTNAME}
     path.data: "#{elasticsearch_data_path}"
     path.logs: "#{elasticsearch_log_path}"
 
-    network.host: [ _eth0:ipv4_ ]
+    network.bind_host: [ "_eth0:ipv4_", "_local:ipv4_" ]
+    network.publish_host: [ "_eth0:ipv4_" ]
 
     http.port: #{http_port}
     transport.tcp.port: #{discovery_port}
 
+    {{ $services := service "#{consul_service_tag}.#{consul_service_name}" }}
+    {{ if containsAny $services }}
     discovery.zen.ping.unicast.hosts:
-      - #{consul_service_tag}.#{consul_service_name}.service.{{ keyOrDefault "config/services/consul/domain" "unknown" }}:#{discovery_port}
-    discovery.zen.minimum_master_nodes: 2
+    {{ range $services }}
+      - {{ .Name }}:#{discovery_port}
+    {{ end }}
+    {{ end }}
+    discovery.zen.minimum_master_nodes: {{ key "config/services/documents/masters" }}
+    EOT
+
+        chown #{node['elasticsearch']['service_user']}:#{node['elasticsearch']['service_group']} #{elasticsearch_config_path}/elasticsearch.yml
+        chmod 550 #{elasticsearch_config_path}/elasticsearch.yml
+
+        if ( ! $(systemctl is-enabled --quiet #{service_name}) ); then
+          systemctl enable #{service_name}
+
+          while true; do
+            if ( (systemctl is-enabled --quiet #{service_name}) ); then
+                break
+            fi
+
+            sleep 1
+          done
+        fi
+
+        if ( ! (systemctl is-active --quiet #{service_name}) ); then
+          systemctl start #{service_name}
+
+          while true; do
+            if ( (systemctl is-active --quiet #{service_name}) ); then
+                break
+            fi
+
+            sleep 1
+          done
+        else
+          systemctl restart #{service_name}
+        fi
+
+        echo "Initialized" > #{flag_config}
+    fi
+    {{ else }}
+    echo "Not all Consul K-V values are available. Will not start Elasticsearch."
+    {{ end }}
+    {{ else }}
+    echo "Not all Consul K-V values are available. Will not start Elasticsearch."
+    {{ end }}
   CONF
-  mode '755'
+  group 'root'
+  mode '0550'
+  owner 'root'
 end
 
+elasticsearch_config_script_file = '/tmp/elasticsearch_config.sh'
 file "#{consul_template_config_path}/elasticsearch_config.hcl" do
   action :create
   content <<~HCL
@@ -170,12 +380,12 @@ file "#{consul_template_config_path}/elasticsearch_config.hcl" do
       # This is the source file on disk to use as the input template. This is often
       # called the "Consul Template template". This option is required if not using
       # the `contents` option.
-      source = "#{consul_template_template_path}/#{elasticsearch_config_template_file}"
+      source = "#{consul_template_template_path}/#{elasticsearch_config_script_template_file}"
 
       # This is the destination path on disk where the source template will render.
       # If the parent directories do not exist, Consul Template will attempt to
       # create them, unless create_dest_dirs is false.
-      destination = "#{elasticsearch_config_path}/elasticsearch.yml"
+      destination = "#{elasticsearch_config_script_file}"
 
       # This options tells Consul Template to create the parent directories of the
       # destination path if they do not exist. The default value is true.
@@ -185,7 +395,7 @@ file "#{consul_template_config_path}/elasticsearch_config.hcl" do
       # command will only run if the resulting template changes. The command must
       # return within 30s (configurable), and it must have a successful exit code.
       # Consul Template is not a replacement for a process monitor or init system.
-      command = "systemctl reload #{service_name}"
+      command = "sh #{elasticsearch_config_script_file}"
 
       # This is the maximum amount of time to wait for the optional command to
       # return. Default is 30s.
@@ -201,7 +411,7 @@ file "#{consul_template_config_path}/elasticsearch_config.hcl" do
       # unspecified, Consul Template will attempt to match the permissions of the
       # file that already exists at the destination path. If no file exists at that
       # path, the permissions are 0644.
-      perms = 0755
+      perms = 0550
 
       # This option backs up the previously rendered template at the destination
       # path before writing a new one. It keeps exactly one backup. This option is
@@ -317,7 +527,7 @@ file "#{consul_template_config_path}/telegraf_elasticsearch_inputs.hcl" do
       # command will only run if the resulting template changes. The command must
       # return within 30s (configurable), and it must have a successful exit code.
       # Consul Template is not a replacement for a process monitor or init system.
-      command = "chown #{node['telegraf']['service_user']}:#{node['telegraf']['service_group']} #{telegraf_config_directory}/inputs_elasticsearch.conf && systemctl reload #{telegraf_service}"
+      command = "/bin/bash -c 'chown #{node['telegraf']['service_user']}:#{node['telegraf']['service_group']} #{telegraf_config_directory}/inputs_elasticsearch.conf && systemctl restart #{telegraf_service}'"
 
       # This is the maximum amount of time to wait for the optional command to
       # return. Default is 30s.

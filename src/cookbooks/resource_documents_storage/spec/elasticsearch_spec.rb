@@ -33,6 +33,113 @@ describe 'resource_documents_storage::elasticsearch' do
     it 'installs the elasticsearch service' do
       expect(chef_run).to configure_elasticsearch_service('elasticsearch')
     end
+
+    elasticsearch_security_override_content = <<~PROPERTIES
+      networkaddress.cache.ttl=0
+      networkaddress.cache.negative.ttl=0
+    PROPERTIES
+    it 'creates the /etc/elasticsearch/java.security' do
+      expect(chef_run).to create_file('/etc/elasticsearch/java.security')
+        .with_content(elasticsearch_security_override_content)
+    end
+
+    elasticsearch_jvm_options_content = <<~PROPERTIES
+      -XX:+UseConcMarkSweepGC
+      -XX:CMSInitiatingOccupancyFraction=75
+      -XX:+UseCMSInitiatingOccupancyOnly
+      -XX:+AlwaysPreTouch
+      -server
+      -Xss1m
+      -Djava.awt.headless=true
+      -Dfile.encoding=UTF-8
+      -Djna.nosys=true
+      -XX:-OmitStackTraceInFastThrow
+      -Dio.netty.noUnsafe=true
+      -Dio.netty.noKeySetOptimization=true
+      -Dio.netty.recycler.maxCapacityPerThread=0
+      -Dlog4j.shutdownHookEnabled=false
+      -Dlog4j2.disable.jmx=true
+      -XX:+HeapDumpOnOutOfMemoryError
+      -Djava.security.properties=/etc/elasticsearch/java.security
+    PROPERTIES
+    it 'creates the /etc/elasticsearch/jvm.options' do
+      expect(chef_run).to create_file('/etc/elasticsearch/jvm.options')
+        .with_content(elasticsearch_jvm_options_content)
+    end
+
+    elasticsearch_start_script_content = <<~TXT
+      #!/bin/bash
+
+      # CONTROLLING STARTUP:
+      #
+      # This script relies on a few environment variables to determine startup
+      # behavior, those variables are:
+      #
+      #   ES_PATH_CONF -- Path to config directory
+      #   ES_JAVA_OPTS -- External Java Opts on top of the defaults set
+      #
+      # Optionally, exact memory values can be set using the `ES_JAVA_OPTS`. Note that
+      # the Xms and Xmx lines in the JVM options file must be commented out. Example
+      # values are "512m", and "10g".
+      #
+      #   ES_JAVA_OPTS="-Xms8g -Xmx8g" ./bin/elasticsearch
+
+      max_memory() {
+        max_mem=$(free -m | grep -oP '\\d+' | head -n 1)
+        echo "${max_mem}"
+      }
+
+      # Check for the 'real memory size' and calculate mx from a ratio
+      # given (default is 70%)
+      max_mem="$(max_memory)"
+      java_max_memory=""
+      if [ "x${max_mem}" != "x0" ]; then
+        ratio=70
+
+        mx=$(echo "(${max_mem} * ${ratio} / 100 + 0.5)" | bc | awk '{printf("%d\\n",$1 + 0.5)}')
+        java_max_memory="-Xmx${mx}m -Xms${mx}m"
+
+        echo "Maximum memory for VM set to ${max_mem}. Setting max memory for java to ${mx} Mb"
+      fi
+
+      source "`dirname "$0"`"/elasticsearch-env
+
+      ES_JVM_OPTIONS="$ES_PATH_CONF"/jvm.options
+      JVM_OPTIONS=`"$JAVA" -cp "$ES_CLASSPATH" org.elasticsearch.tools.launchers.JvmOptionsParser "$ES_JVM_OPTIONS"`
+      ES_JAVA_OPTS="${JVM_OPTIONS//\\$\\{ES_TMPDIR\\}/$ES_TMPDIR} $ES_JAVA_OPTS"
+
+      cd "$ES_HOME"
+      nohup \\
+        "$JAVA" \\
+        $ES_JAVA_OPTS \\
+        $java_max_memory \\
+        -Des.path.home="$ES_HOME" \\
+        -Des.path.conf="$ES_PATH_CONF" \\
+        -Des.distribution.flavor="$ES_DISTRIBUTION_FLAVOR" \\
+        -Des.distribution.type="$ES_DISTRIBUTION_TYPE" \\
+        -cp "$ES_CLASSPATH" \\
+        org.elasticsearch.bootstrap.Elasticsearch \\
+        "$@" \\
+        <&- &
+
+      retval=$?
+      pid=$!
+
+      [ $retval -eq 0 ] || exit $retval
+      if [ ! -z "$ES_STARTUP_SLEEP_TIME" ]; then
+        sleep $ES_STARTUP_SLEEP_TIME
+      fi
+      if ! ps -p $pid > /dev/null ; then
+        exit 1
+      fi
+      exit 0
+
+      exit $?
+    TXT
+    it 'creates the /usr/share/elasticsearch/bin/elasticsearch' do
+      expect(chef_run).to create_file('/usr/share/elasticsearch/bin/elasticsearch')
+        .with_content(elasticsearch_start_script_content)
+    end
   end
 
   context 'configures the firewall for ElasticSearch' do
@@ -56,7 +163,7 @@ describe 'resource_documents_storage::elasticsearch' do
           {
             "checks": [
               {
-                "http": "http://localhost:9200/ping",
+                "http": "http://localhost:9200/_cluster/health",
                 "id": "elasticsearch_http_health_check",
                 "interval": "30s",
                 "method": "GET",
@@ -81,30 +188,109 @@ describe 'resource_documents_storage::elasticsearch' do
     end
   end
 
+  context 'adds the flag files' do
+    let(:chef_run) { ChefSpec::SoloRunner.converge(described_recipe) }
+
+    flag_config_content = <<~TXT
+      NotInitialized
+    TXT
+    it 'creates the /etc/elasticsearch/java.security' do
+      expect(chef_run).to create_file('/var/log/elasticsearch_config.log')
+        .with_content(flag_config_content)
+    end
+
+    flag_jvm_options_content = <<~TXT
+      NotInitialized
+    TXT
+    it 'creates the /etc/elasticsearch/java.security' do
+      expect(chef_run).to create_file('/var/log/jvm_options.log')
+        .with_content(flag_jvm_options_content)
+    end
+  end
+
   context 'adds the consul-template files for the elasticsearch configuration' do
     let(:chef_run) { ChefSpec::SoloRunner.converge(described_recipe) }
 
-    elasticsearch_config_template_content = <<~CONF
-      cluster.name: "{{ keyOrDefault "config/services/consul/datacenter" "unknown" }}"
+    elasticsearch_config_script_template_content = <<~CONF
+      #!/bin/sh
+
+      {{ if keyExists "config/services/consul/datacenter" }}
+      {{ if keyExists "config/services/documents/masters" }}
+      FLAG=$(cat /var/log/elasticsearch_config.log)
+      if [ "$FLAG" = "NotInitialized" ]; then
+          echo "Write the elasticsearch configuration script ..."
+          cat <<'EOT' > /etc/elasticsearch/elasticsearch.yml
+      cluster.name: "{{ key "config/services/consul/datacenter" }}"
       node.name: ${HOSTNAME}
       path.data: "/srv/elasticsearch/data"
       path.logs: "/var/log/elasticsearch"
 
-      network.host: [ _eth0:ipv4_ ]
+      network.bind_host: [ "_eth0:ipv4_", "_local:ipv4_" ]
+      network.publish_host: [ "_eth0:ipv4_" ]
 
       http.port: 9200
       transport.tcp.port: 9300
 
+
+      {{ $services := service "http.documents" }}
+      {{ if containsAny $services }}
       discovery.zen.ping.unicast.hosts:
-        - http.documents.service.{{ keyOrDefault "config/services/consul/domain" "unknown" }}:9300
-      discovery.zen.minimum_master_nodes: 2
+      {{ range $services }}
+        - {{ .Name }}:9300
+      {{ end }}
+      {{ end }}
+      discovery.zen.minimum_master_nodes: {{ key "config/services/documents/masters" }}
+      EOT
+
+          chown elasticsearch:elasticsearch /etc/elasticsearch/elasticsearch.yml
+          chmod 550 /etc/elasticsearch/elasticsearch.yml
+
+          if ( ! $(systemctl is-enabled --quiet elasticsearch) ); then
+            systemctl enable elasticsearch
+
+            while true; do
+              if ( (systemctl is-enabled --quiet elasticsearch) ); then
+                  break
+              fi
+
+              sleep 1
+            done
+          fi
+
+          if ( ! (systemctl is-active --quiet elasticsearch) ); then
+            systemctl start elasticsearch
+
+            while true; do
+              if ( (systemctl is-active --quiet elasticsearch) ); then
+                  break
+              fi
+
+              sleep 1
+            done
+          else
+            systemctl restart elasticsearch
+          fi
+
+          echo "Initialized" > /var/log/elasticsearch_config.log
+      fi
+      {{ else }}
+      echo "Not all Consul K-V values are available. Will not start Elasticsearch."
+      {{ end }}
+      {{ else }}
+      echo "Not all Consul K-V values are available. Will not start Elasticsearch."
+      {{ end }}
     CONF
     it 'creates ElasticSearch configuration template file in the consul-template template directory' do
       expect(chef_run).to create_file('/etc/consul-template.d/templates/elasticsearch_config.ctmpl')
-        .with_content(elasticsearch_config_template_content)
+        .with_content(elasticsearch_config_script_template_content)
+        .with(
+          group: 'root',
+          owner: 'root',
+          mode: '0550'
+        )
     end
 
-    consul_template_telegraf_elasticsearch_inputs_content = <<~CONF
+    consul_template_elasticsearch_config_content = <<~CONF
       # This block defines the configuration for a template. Unlike other blocks,
       # this block may be specified multiple times to configure multiple templates.
       # It is also possible to configure templates via the CLI directly.
@@ -117,7 +303,7 @@ describe 'resource_documents_storage::elasticsearch' do
         # This is the destination path on disk where the source template will render.
         # If the parent directories do not exist, Consul Template will attempt to
         # create them, unless create_dest_dirs is false.
-        destination = "/etc/elasticsearch/elasticsearch.yml"
+        destination = "/tmp/elasticsearch_config.sh"
 
         # This options tells Consul Template to create the parent directories of the
         # destination path if they do not exist. The default value is true.
@@ -127,7 +313,7 @@ describe 'resource_documents_storage::elasticsearch' do
         # command will only run if the resulting template changes. The command must
         # return within 30s (configurable), and it must have a successful exit code.
         # Consul Template is not a replacement for a process monitor or init system.
-        command = "systemctl reload elasticsearch"
+        command = "sh /tmp/elasticsearch_config.sh"
 
         # This is the maximum amount of time to wait for the optional command to
         # return. Default is 30s.
@@ -143,7 +329,7 @@ describe 'resource_documents_storage::elasticsearch' do
         # unspecified, Consul Template will attempt to match the permissions of the
         # file that already exists at the destination path. If no file exists at that
         # path, the permissions are 0644.
-        perms = 0755
+        perms = 0550
 
         # This option backs up the previously rendered template at the destination
         # path before writing a new one. It keeps exactly one backup. This option is
@@ -169,9 +355,14 @@ describe 'resource_documents_storage::elasticsearch' do
         }
       }
     CONF
-    it 'creates telegraf_elasticsearch_inputs.hcl in the consul-template template directory' do
-      expect(chef_run).to create_file('/etc/consul-template.d/conf/telegraf_elasticsearch_inputs.hcl')
-        .with_content(consul_template_telegraf_elasticsearch_inputs_content)
+    it 'creates elasticsearch_config.hcl in the consul-template template directory' do
+      expect(chef_run).to create_file('/etc/consul-template.d/conf/elasticsearch_config.hcl')
+        .with_content(consul_template_elasticsearch_config_content)
+        .with(
+          group: 'root',
+          owner: 'root',
+          mode: '0550'
+        )
     end
   end
 
@@ -257,7 +448,7 @@ describe 'resource_documents_storage::elasticsearch' do
         # command will only run if the resulting template changes. The command must
         # return within 30s (configurable), and it must have a successful exit code.
         # Consul Template is not a replacement for a process monitor or init system.
-        command = "chown telegraf:telegraf /etc/telegraf/telegraf.d/inputs_elasticsearch.conf && systemctl reload telegraf"
+        command = "/bin/bash -c 'chown telegraf:telegraf /etc/telegraf/telegraf.d/inputs_elasticsearch.conf && systemctl restart telegraf'"
 
         # This is the maximum amount of time to wait for the optional command to
         # return. Default is 30s.
