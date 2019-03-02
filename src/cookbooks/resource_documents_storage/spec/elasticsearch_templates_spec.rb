@@ -13,14 +13,6 @@ describe 'resource_documents_storage::elasticsearch_templates' do
       expect(chef_run).to create_file('/var/log/elasticsearch_config.log')
         .with_content(flag_config_content)
     end
-
-    flag_jvm_options_content = <<~TXT
-      NotInitialized
-    TXT
-    it 'creates the /etc/elasticsearch/java.security' do
-      expect(chef_run).to create_file('/var/log/jvm_options.log')
-        .with_content(flag_jvm_options_content)
-    end
   end
 
   context 'adds the consul-template files for the elasticsearch configuration' do

@@ -19,14 +19,6 @@ file flag_config do
   TXT
 end
 
-flag_jvm_options = '/var/log/jvm_options.log'
-file flag_jvm_options do
-  action :create
-  content <<~TXT
-    NotInitialized
-  TXT
-end
-
 #
 # CONSUL-TEMPLATE FILES
 #
