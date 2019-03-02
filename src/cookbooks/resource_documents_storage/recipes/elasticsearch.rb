@@ -8,14 +8,6 @@
 #
 
 #
-# INSTALL THE CALCULATOR
-#
-
-apt_package 'bc' do
-  action :install
-end
-
-#
 # ELASTICSEARCH USER
 #
 
@@ -58,7 +50,9 @@ end
 
 # install the service. We'll overwrite that but we need this here in order
 # to write all the configurations
+service_name = node['elasticsearch']['service_name']
 elasticsearch_service service_name do
+  action :nothing
 end
 
 #

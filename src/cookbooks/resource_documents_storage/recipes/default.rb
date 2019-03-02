@@ -19,7 +19,11 @@ end
 include_recipe 'resource_documents_storage::firewall'
 
 include_recipe 'resource_documents_storage::meta'
-include_recipe 'resource_documents_storage::provisioning'
 
 include_recipe 'resource_documents_storage::java'
+
 include_recipe 'resource_documents_storage::elasticsearch'
+include_recipe 'resource_documents_storage::elasticsearch_service'
+include_recipe 'resource_documents_storage::elasticsearch_templates'
+
+include_recipe 'resource_documents_storage::provisioning'
