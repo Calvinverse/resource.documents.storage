@@ -74,6 +74,14 @@ describe 'resource_documents_storage::elasticsearch' do
         direction: :in
       )
     end
+
+    it 'opens the ElasticSearch discovery port' do
+      expect(chef_run).to create_firewall_rule('elasticsearch-discovery').with(
+        command: :allow,
+        dest_port: 9300,
+        direction: :in
+      )
+    end
   end
 
   context 'registers the service with consul' do
