@@ -50,6 +50,10 @@ describe 'resource_documents_storage::elasticsearch_templates' do
       discovery.zen.ping.unicast.hosts: '127.0.0.1'
       discovery.zen.hosts_provider: file
       discovery.zen.minimum_master_nodes: {{ key "config/services/documents/masters" }}
+
+      xpack.monitoring.enabled: true
+      xpack.monitoring.elasticsearch.collection.enabled: true
+      xpack.monitoring.collection.enabled: true
       EOT
 
           chown elasticsearch:elasticsearch /etc/elasticsearch/elasticsearch.yml

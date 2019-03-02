@@ -74,6 +74,10 @@ file "#{consul_template_template_path}/#{elasticsearch_config_script_template_fi
     discovery.zen.ping.unicast.hosts: '127.0.0.1'
     discovery.zen.hosts_provider: file
     discovery.zen.minimum_master_nodes: {{ key "config/services/documents/masters" }}
+
+    xpack.monitoring.enabled: true
+    xpack.monitoring.elasticsearch.collection.enabled: true
+    xpack.monitoring.collection.enabled: true
     EOT
 
         chown #{node['elasticsearch']['service_user']}:#{node['elasticsearch']['service_group']} #{elasticsearch_config_path}/elasticsearch.yml
