@@ -71,7 +71,8 @@ file "#{consul_template_template_path}/#{elasticsearch_config_script_template_fi
     http.port: #{http_port}
     transport.tcp.port: #{discovery_port}
 
-    discovery.zen.host_provider: file
+    discovery.zen.ping.unicast.hosts: '127.0.0.1'
+    discovery.zen.hosts_provider: file
     discovery.zen.minimum_master_nodes: {{ key "config/services/documents/masters" }}
     EOT
 

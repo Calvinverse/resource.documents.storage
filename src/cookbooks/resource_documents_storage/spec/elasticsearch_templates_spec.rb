@@ -47,7 +47,8 @@ describe 'resource_documents_storage::elasticsearch_templates' do
       http.port: 9200
       transport.tcp.port: 9300
 
-      discovery.zen.host_provider: file
+      discovery.zen.ping.unicast.hosts: '127.0.0.1'
+      discovery.zen.hosts_provider: file
       discovery.zen.minimum_master_nodes: {{ key "config/services/documents/masters" }}
       EOT
 
