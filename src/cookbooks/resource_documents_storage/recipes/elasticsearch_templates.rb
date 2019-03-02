@@ -230,7 +230,7 @@ file "#{consul_template_config_path}/elasticsearch_hosts.hcl" do
       # command will only run if the resulting template changes. The command must
       # return within 30s (configurable), and it must have a successful exit code.
       # Consul Template is not a replacement for a process monitor or init system.
-      command = ""
+      command = "/bin/bash -c 'chown #{node['elasticsearch']['service_user']}:#{node['elasticsearch']['service_group']} #{elasticsearch_hosts_file}'"
 
       # This is the maximum amount of time to wait for the optional command to
       # return. Default is 30s.

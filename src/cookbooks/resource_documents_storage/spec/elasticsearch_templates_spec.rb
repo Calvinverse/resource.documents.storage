@@ -210,7 +210,7 @@ describe 'resource_documents_storage::elasticsearch_templates' do
         # command will only run if the resulting template changes. The command must
         # return within 30s (configurable), and it must have a successful exit code.
         # Consul Template is not a replacement for a process monitor or init system.
-        command = ""
+        command = "/bin/bash -c 'chown elasticsearch:elasticsearch /etc/elasticsearch/unicast_hosts.txt'"
 
         # This is the maximum amount of time to wait for the optional command to
         # return. Default is 30s.
