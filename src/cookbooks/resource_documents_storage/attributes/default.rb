@@ -11,7 +11,7 @@ default['consul_template']['template_path'] = '/etc/consul-template.d/templates'
 # ELASTICSEARCH
 #
 
-default['elasticsearch']['version'] = '6.3.1'
+default['elasticsearch']['version'] = '6.6.1'
 default['elasticsearch']['service_name'] = 'elasticsearch'
 default['elasticsearch']['service_user'] = 'elasticsearch'
 default['elasticsearch']['service_group'] = 'elasticsearch'
@@ -30,17 +30,6 @@ default['elasticsearch']['port']['discovery'] = 9300
 default['elasticsearch']['port']['http'] = 9200
 
 default['elasticsearch']['telegraf']['consul_template_inputs_file'] = 'telegraf_elasticsearch_inputs.ctmpl'
-
-# default['elasticsearch']['configure'] = {
-#   'path_home' => node['elasticsearch']['path']['home'],
-#   'path_conf' => node['elasticsearch']['path']['config'],
-#   'path_data' => node['elasticsearch']['path']['data'],
-#   'path_logs' => node['elasticsearch']['path']['logs'],
-#   'path_pid' => node['elasticsearch']['path']['pid'],
-#   'path_plugins' => node['elasticsearch']['path']['plugins'],
-#   'path_bin' => node['elasticsearch']['path']['bin'],
-#   'http.port' => node['elasticsearch']['port']['http']
-# }
 
 #
 # FIREWALL
