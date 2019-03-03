@@ -33,6 +33,7 @@ After=network-online.target
 
 [Service]
 RuntimeDirectory=elasticsearch
+PrivateTmp=true
 Environment=ES_HOME=/usr/share/elasticsearch
 Environment=ES_PATH_CONF=/etc/elasticsearch
 Environment=PID_DIR=/var/run/elasticsearch
@@ -84,7 +85,7 @@ SuccessExitStatus=143
 [Install]
 WantedBy=multi-user.target
 
-# Built for distribution-6.0.0 (distribution)
+# Built for packages-6.6.1 (packages)
 
 '@
         $serviceFileContent = Get-Content $serviceConfigurationPath | Out-String

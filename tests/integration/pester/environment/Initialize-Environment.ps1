@@ -27,6 +27,9 @@ function Initialize-Environment
 
     Write-Output "Giving consul-template 30 seconds to process the data ..."
     Start-Sleep -Seconds 30
+
+    Write-Output "Waiting for Elasticsearch to restart ..."
+    Start-Sleep -Seconds 90
 }
 
 function Install-Vault
