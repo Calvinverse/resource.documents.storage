@@ -21,7 +21,7 @@
         {
             "boot_wait": "5s",
             "boot_command": [],
-            "clone_from_vmxc_path": "{{ user `dir_vm_import` }}",
+            "clone_from_vmcx_path": "{{ user `dir_vm_import` }}",
             "communicator": "ssh",
             "enable_dynamic_memory": false,
             "enable_mac_spoofing": false,
@@ -50,15 +50,40 @@
     ],
     "provisioners": [
         {
-            "command": "Set-VM -Name {{ user `vm_name` }} -AutomaticCheckpointsEnabled $false",
-            "execute_command": ["Powershell.exe", "-NonInteractive", "-NoLogo", "-NoProfile", "-Command", "{{.Command}}"],
+            "env_var_format": "$env:%s=\"%s\"; ",
+            "environment_vars": [],
+            "execute_command": [
+                "Powershell.exe",
+                "-NonInteractive",
+                "-NoLogo",
+                "-NoProfile",
+                "-Command",
+                "{{.Vars}} {{.Script}}"
+            ],
+            "inline": [
+                "Set-VM -Name {{ user `vm_name` }} -AutomaticCheckpointsEnabled $false"
+            ],
+            "tempfile_extension": ".ps1",
             "type": "shell-local"
         },
         {
-            "command": "Get-VMSnapshot -VMName {{ user `vm_name` }} | Remove-VMSnapshot",
-            "execute_command": ["Powershell.exe", "-NonInteractive", "-NoLogo", "-NoProfile", "-Command", "{{.Command}}"],
+            "env_var_format": "$env:%s=\"%s\"; ",
+            "environment_vars": [],
+            "execute_command": [
+                "Powershell.exe",
+                "-NonInteractive",
+                "-NoLogo",
+                "-NoProfile",
+                "-Command",
+                "{{.Vars}} {{.Script}}"
+            ],
+            "inline": [
+                "Get-VMSnapshot -VMName {{ user `vm_name` }} | Remove-VMSnapshot"
+            ],
+            "tempfile_extension": ".ps1",
             "type": "shell-local"
         },
+
         {
             "destination": "/tmp/unbound_zones.conf",
             "source": "{{ user `dir_src_provisioning` }}/unbound_zones.conf",
