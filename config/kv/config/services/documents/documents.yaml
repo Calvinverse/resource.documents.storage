@@ -1,0 +1,14 @@
+config:
+  # Defines the consul DNS name for the documents API that allows connection via
+  # the HTTP protocol
+  - key: config/services/documents/protocols/http/host
+    value: http.documents
+
+  # Defines the port for the documents API that allows connection via
+  # the HTTP protocol
+  - key: config/services/documents/protocols/http/port
+    value: 9200
+
+  # Defines the minimum number of master nodes that should be present
+  - key: config/services/documents/masters
+    value: 2
