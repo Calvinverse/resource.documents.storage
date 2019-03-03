@@ -174,7 +174,7 @@ describe 'resource_documents_storage::elasticsearch_templates' do
     elasticsearch_hosts_template_content = <<~CONF
       {{ $services := service "http.documents" }}
       {{ range $services }}
-        - {{ .Name }}:9300
+      {{ .Address }}:9300
       {{ end }}
     CONF
     it 'creates ElasticSearch hosts template file in the consul-template template directory' do
