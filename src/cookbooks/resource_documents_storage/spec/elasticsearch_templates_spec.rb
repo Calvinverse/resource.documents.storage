@@ -172,7 +172,7 @@ describe 'resource_documents_storage::elasticsearch_templates' do
     end
 
     elasticsearch_hosts_template_content = <<~CONF
-      {{ $services := service "http.documents" }}
+      {{ $services := service "http.documents|any" }}
       {{ range $services }}
       {{ .Address }}:9300
       {{ end }}

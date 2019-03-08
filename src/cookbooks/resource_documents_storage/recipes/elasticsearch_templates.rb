@@ -194,7 +194,7 @@ elasticsearch_hosts_template_file = 'elasticsearch_hosts.ctmpl'
 file "#{consul_template_template_path}/#{elasticsearch_hosts_template_file}" do
   action :create
   content <<~CONF
-    {{ $services := service "#{consul_service_tag}.#{consul_service_name}" }}
+    {{ $services := service "#{consul_service_tag}.#{consul_service_name}|any" }}
     {{ range $services }}
     {{ .Address }}:#{discovery_port}
     {{ end }}
