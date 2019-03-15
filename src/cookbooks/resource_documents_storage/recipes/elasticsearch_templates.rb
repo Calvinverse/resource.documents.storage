@@ -303,10 +303,10 @@ file "#{consul_template_template_path}/#{telegraf_elasticsearch_inputs_template_
     ## When local is true (the default), the node will read only its own stats.
     ## Set local to false when you want to read the node stats from all nodes
     ## of the cluster.
-    local = true
+    local = false
 
     ## Set cluster_health to true when you want to also obtain cluster health stats
-    cluster_health = false
+    cluster_health = true
 
     ## Adjust cluster_health_level when you want to also obtain detailed health stats
     ## The options are
