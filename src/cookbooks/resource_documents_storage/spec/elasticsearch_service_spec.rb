@@ -67,5 +67,9 @@ describe 'resource_documents_storage::elasticsearch_service' do
       expect(chef_run).to create_file('/usr/share/elasticsearch/bin/elasticsearch')
         .with_content(elasticsearch_start_script_content)
     end
+
+    it 'disables the elasticsearch service' do
+      expect(chef_run).to disable_service('elasticsearch')
+    end
   end
 end

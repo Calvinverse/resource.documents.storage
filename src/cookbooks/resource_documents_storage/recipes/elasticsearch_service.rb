@@ -132,5 +132,5 @@ systemd_service service_name do
 end
 
 service service_name do
-  action :enable
+  action :disable
 end
