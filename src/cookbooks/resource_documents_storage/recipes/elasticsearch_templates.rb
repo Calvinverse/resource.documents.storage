@@ -194,7 +194,7 @@ elasticsearch_hosts_template_file = 'elasticsearch_hosts.ctmpl'
 file "#{consul_template_template_path}/#{elasticsearch_hosts_template_file}" do
   action :create
   content <<~CONF
-    {{ $services := service "#{consul_service_tag}.#{consul_service_name}" }}
+    {{ $services := service "#{consul_service_tag}.#{consul_service_name}|any" }}
     {{ range $services }}
     {{ .Address }}:#{discovery_port}
     {{ end }}
@@ -303,10 +303,10 @@ file "#{consul_template_template_path}/#{telegraf_elasticsearch_inputs_template_
     ## When local is true (the default), the node will read only its own stats.
     ## Set local to false when you want to read the node stats from all nodes
     ## of the cluster.
-    local = true
+    local = false
 
     ## Set cluster_health to true when you want to also obtain cluster health stats
-    cluster_health = false
+    cluster_health = true
 
     ## Adjust cluster_health_level when you want to also obtain detailed health stats
     ## The options are

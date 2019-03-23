@@ -172,7 +172,7 @@ describe 'resource_documents_storage::elasticsearch_templates' do
     end
 
     elasticsearch_hosts_template_content = <<~CONF
-      {{ $services := service "http.documents" }}
+      {{ $services := service "http.documents|any" }}
       {{ range $services }}
       {{ .Address }}:9300
       {{ end }}
@@ -283,10 +283,10 @@ describe 'resource_documents_storage::elasticsearch_templates' do
       ## When local is true (the default), the node will read only its own stats.
       ## Set local to false when you want to read the node stats from all nodes
       ## of the cluster.
-      local = true
+      local = false
 
       ## Set cluster_health to true when you want to also obtain cluster health stats
-      cluster_health = false
+      cluster_health = true
 
       ## Adjust cluster_health_level when you want to also obtain detailed health stats
       ## The options are
