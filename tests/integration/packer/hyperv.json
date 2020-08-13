@@ -16,7 +16,7 @@
     },
     "builders": [
         {
-            "boot_wait": "90s",
+            "boot_wait": "30s",
             "boot_command": [],
             "clone_from_vmcx_path": "{{ user `dir_temp` }}/{{ user `vm_name` }}/resource",
             "communicator": "ssh",
@@ -30,8 +30,8 @@
             "http_directory": "{{ user `dir_http_user` }}",
             "http_port_min": 8150,
             "http_port_max": 8160,
+            "memory": "{{ user `vm_ram_size_in_mb` }}",
             "output_directory": "{{ user `dir_temp` }}/test-{{ user `vm_name` }}",
-            "ram_size": "{{ user `vm_ram_size_in_mb` }}",
             "secondary_iso_images": [
                 "{{ user `dir_deploy` }}/{{ user `product_name` }}-test-provision.iso"
             ],
@@ -54,9 +54,9 @@
         {
             "expect_disconnect" : true,
             "inline": [
-                "echo \"Waiting for reboot after provisioning ...\""
+                "echo \"Waited for reboot after provisioning ...\""
             ],
-            "pause_before" : "45s",
+            "pause_before" : "30s",
             "type": "shell"
         },
         {
@@ -67,7 +67,7 @@
             "type": "shell"
         },
         {
-            "destination": "/test/pester/",
+            "destination": "/test/pester",
             "source": "{{ user `dir_temp` }}/tests/integration/pester",
             "type": "file"
         },
@@ -84,7 +84,7 @@
                 "echo '{{user `admin_password`}}' | sudo -S -E apt-get update",
                 "echo '{{user `admin_password`}}' | sudo -S -E apt install --assume-yes curl",
                 "curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -",
-                "curl https://packages.microsoft.com/config/ubuntu/16.04/prod.list | sudo tee /etc/apt/sources.list.d/microsoft.list",
+                "curl https://packages.microsoft.com/config/ubuntu/18.04/prod.list | sudo tee /etc/apt/sources.list.d/microsoft.list",
                 "echo '{{user `admin_password`}}' | sudo -S -E apt-get update",
                 "echo '{{user `admin_password`}}' | sudo -S -E apt-get install --assume-yes powershell",
                 "echo '{{user `admin_password`}}' | sudo -S -E apt-get install --assume-yes unzip"
@@ -103,7 +103,7 @@
             "inline": [
                 "echo '{{user `admin_password`}}' | sudo -S -E pwsh -Command '$ErrorActionPreference = \"Stop\"; Set-PSRepository -Name PSGallery -InstallationPolicy Trusted '",
                 "echo '{{user `admin_password`}}' | sudo -S -E pwsh -Command '$ErrorActionPreference = \"Stop\"; Install-Module Pester '",
-                "echo '{{user `admin_password`}}' | sudo -S -E pwsh -Command '$ErrorActionPreference = \"Stop\"; $result = Invoke-Pester -Script /test/pester/* -PassThru; exit $result.FailedCount '"
+                "echo '{{user `admin_password`}}' | sudo -S -E pwsh -Command '$ErrorActionPreference = \"Stop\";[Environment]::SetEnvironmentVariable(\"Hypervisor\", \"hyper-v\"); $result = Invoke-Pester -Script /test/pester/* -PassThru; exit $result.FailedCount '"
             ],
             "type": "shell"
         }
