@@ -13,12 +13,26 @@ Describe 'On the system' {
 
     Context 'the administrator rights' {
         It 'should have default sudo settings' {
-            (Get-FileHash -Path /etc/sudoers -Algorithm SHA256).Hash | Should Be '1DA6E2BCBBA35669C9EB62370C88F4017686309C9AC4E6458D963321EAD42439'
+            if ([Environment]::GetEnvironmentVariable('Hypervisor') -eq 'azure' ) {
+                # On Azure Packer will add itself to the users list
+            }
+            else {
+                (Get-FileHash -Path /etc/sudoers -Algorithm SHA256).Hash | Should Be '1DA6E2BCBBA35669C9EB62370C88F4017686309C9AC4E6458D963321EAD42439'
+            }
         }
 
         It 'should not have additional sudo files' {
             '/etc/sudoers.d' | Should Exist
-            @( (Get-ChildItem -Path /etc/sudoers.d -File) ).Length | Should Be 1
+
+            if ([Environment]::GetEnvironmentVariable('Hypervisor') -eq 'azure' ) {
+                # On Azure there will be two files in the /etc/sudoers.d directory. The first one is the sudoers file,
+                # the second one is the cloud-init sudoers file
+                @( (Get-ChildItem -Path /etc/sudoers.d -File) ).Length | Should Be 2
+            }
+            else {
+                @( (Get-ChildItem -Path /etc/sudoers.d -File) ).Length | Should Be 1
+            }
+
         }
     }
 
@@ -27,6 +41,7 @@ Describe 'On the system' {
             $env:STATSD_ENABLED_SERVICES | Should Be 'consul'
         }
     }
+
     Context 'system updates' {
         # split the output which should contain the names of the packages that have not been updated.
         # We allow the following list:
@@ -58,8 +73,7 @@ Describe 'On the system' {
         }
 
         $fileSize = (Get-Item '/test/updates.txt').Length
-        if ($fileSize -gt 0)
-        {
+        if ($fileSize -gt 0) {
             $updates = Get-Content /tmp/updates.txt
             $additionalPackages = Compare-Object $allowedPackages $updates | Where-Object { $_.sideindicator -eq '=>' }
 
@@ -82,10 +96,30 @@ Describe 'On the system' {
         It 'has disable the apt-daily timer' {
             $systemctlOutput | Should Not Be $null
             $systemctlOutput.GetType().FullName | Should Be 'System.Object[]'
-            $systemctlOutput.Length | Should Be 3
+            $systemctlOutput.Length | Should Be 4
             $systemctlOutput[0] | Should Match 'apt-daily.timer - Daily apt download activities'
             $systemctlOutput[1] | Should Match 'Loaded:\sloaded\s\(.*;\sdisabled;.*\)'
             $systemctlOutput[2] | Should Match 'Active:\sinactive\s\(dead\).*'
+            $systemctlOutput[3] | Should Match 'Trigger:\sn/a'
+        }
+
+        $aptPeriodicPath = '/etc/apt/apt.conf.d/10periodic'
+        if (-not (Test-Path $aptPeriodicPath)) {
+            It 'has an apt period configuration file' {
+                $false | Should Be $true
+            }
+        }
+
+        $expectedContent = @'
+APT::Periodic::Update-Package-Lists "0";
+APT::Periodic::Download-Upgradeable-Packages "0";
+APT::Periodic::AutocleanInterval "0";
+
+'@
+
+        $aptPeriodicFileContent = Get-Content $aptPeriodicPath | Out-String
+        It 'has an apt period file in which package updating is disabled' {
+            $aptPeriodicFileContent | Should Be ($expectedContent -replace "`r", "")
         }
     }
 }

@@ -1,5 +1,6 @@
 Describe 'On the system' {
     Context 'system logs' {
+
         # There should be test here but in order to test whether the rabbitmq target is generated
         # we need an active Vault instance that can generate RabbitMQ log-in credentials, and that
         # requires an active RabbitMQ instance. Creating a Vault instance for testing is easy,
