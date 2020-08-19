@@ -48,6 +48,14 @@ default['firewall']['allow_winrm'] = false
 default['firewall']['ipv6_enabled'] = false
 
 #
+# JAVA
+#
+
+default['java']['jdk_version'] = '8'
+default['java']['install_flavor'] = 'openjdk'
+default['java']['install_type'] = 'jdk'
+
+#
 # TELEGRAF
 #
 
