@@ -13,7 +13,7 @@ version '${VersionSemantic}'
 
 supports 'ubuntu', '>= 16.04'
 
-depends 'elasticsearch', '= 4.0.5'
+depends 'elasticsearch', '= 4.3.0'
 depends 'firewall', '= 2.6.3'
 depends 'java', '= 4.0.0'
 depends 'poise-service', '= 1.5.2'
