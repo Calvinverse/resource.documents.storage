@@ -81,6 +81,10 @@
             Include="$(DirSrcCookbooks)\$(NameCookbook)\**\*.*">
             <Destination>$(DirBuildTempCookbooks)\$(NameCookbook)</Destination>
         </FilesToCopy>
+        <FilesToCopy
+            Include="$(DirSrcPacker)\*.sh">
+            <Destination>$(DirBuildTemp)\build</Destination>
+        </FilesToCopy>
     </ItemGroup>
     <ItemGroup Condition=" '$(ShouldLoadNuGetFilesToCopy)' == 'true' ">
         <!--
