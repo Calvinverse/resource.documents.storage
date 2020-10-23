@@ -11,7 +11,7 @@ default['consul_template']['template_path'] = '/etc/consul-template.d/templates'
 # ELASTICSEARCH
 #
 
-default['elasticsearch']['version'] = '6.6.1'
+default['elasticsearch']['version'] = '7.9.0'
 default['elasticsearch']['service_name'] = 'elasticsearch'
 default['elasticsearch']['service_user'] = 'elasticsearch'
 default['elasticsearch']['service_group'] = 'elasticsearch'
