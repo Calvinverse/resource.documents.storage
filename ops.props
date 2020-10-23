@@ -524,7 +524,7 @@
         <!-- <TemplateTokenGenerators>UNDEFINED</TemplateTokenGenerators> -->
     </PropertyGroup>
     <PropertyGroup>
-        <LinuxImage Condition=" '$(LinuxImage)' == '' ">resource.metrics.dashboard</LinuxImage>
+        <LinuxImage Condition=" '$(LinuxImage)' == '' ">resource.documents.storage</LinuxImage>
     </PropertyGroup>
 
     <!--
