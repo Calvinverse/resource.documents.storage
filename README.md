@@ -8,7 +8,7 @@ search engine.
 
 ## Image
 
-The image is created by using the [Linux base image](https://github.com/Calvinverse/base.linux)
+The image is created by using the [Linux base image](https://github.com/Calvinverse/base.vm.linux)
 and ammending it using a [Chef](https://www.chef.io/chef/) cookbook which installs the Java
 Development Kit and Elasticsearch.
 
